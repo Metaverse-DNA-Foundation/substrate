@@ -18,7 +18,7 @@
 
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{traits::Len, hash::{Twox128, StorageHasher}};
+use crate::{traits::Len, hash::{Twox128, StorageHasher, StorageHasherInfo}};
 
 pub mod unhashed;
 pub mod hashed;
@@ -269,6 +269,27 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
+	/// Hasher used to hash first key.
+	type Hasher1;
+
+	/// Hasher used to hash second key.
+	type Hasher2;
+
+	/// The type that iterates over a prefix with `value`.
+	type ValueIterator: Iterator<Item = V>;
+
+	/// The type that iterates over a prefix with `(first key, value)`.
+	/// Only used when Hasher1 is reversible.
+	type Key1ValueIterator: Iterator<Item = (K1, V)>;
+
+	/// The type that iterates over a prefix with `(second key, value)`.
+	/// Only used when Hasher2 is reversible.
+	type Key2ValueIterator: Iterator<Item = (K2, V)>;
+
+	/// The type that iterates over a prefix with `(first key, second key, value)`.
+	/// Only used when Hasher1 and Hasher2 are reversible.
+	type Key1Key2ValueIterator: Iterator<Item = (K1, K2, V)>;
+
 	fn hashed_key_for<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
 	where
 		KArg1: EncodeLike<K1>,
@@ -310,8 +331,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
 
-	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V>
-		where KArg1: ?Sized + EncodeLike<K1>;
+	fn remove_all();
 
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
@@ -370,6 +390,42 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KeyArg1: EncodeLike<K1>,
 		KeyArg2: EncodeLike<K2>,
 	>(key1: KeyArg1, key2: KeyArg2) -> Option<V>;
+
+	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	fn translate<O: Decode, F: Fn(O) -> Option<V>>(f: F);
+
+	/// Enumerate all elements in the map with first key `k1` in no particular order. If you add or
+	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined
+	/// results.
+	fn iter_prefix_key2_value(k1: impl EncodeLike<K1>) -> Self::Key2ValueIterator where
+		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+
+	/// Remove all elements from the map with first key `k1` and iterate through them in no
+	/// particular order. If you add elements with first key `k1` to the map while doing this,
+	/// you'll get undefined results.
+	fn drain_prefix_key2_value(k1: impl EncodeLike<K1>) -> Self::Key2ValueIterator where
+		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+
+	/// Iter over all value associated to the first key.
+	fn iter_prefix_value<KArg1>(k1: KArg1) -> Self::ValueIterator where
+		KArg1: ?Sized + EncodeLike<K1>;
+
+	/// Iter over all value with its assocaited first key.
+	fn iter_key1_value() -> Self::Key1ValueIterator where
+		Self::Hasher1: StorageHasherInfo<K1, Info=K1>;
+
+	/// Iter over all value with its assocaited second key.
+	fn iter_key2_value() -> Self::Key2ValueIterator where
+		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+
+	/// Iter over all value with its assocaited first key and second key.
+	fn iter_key1_key2_value() -> Self::Key1Key2ValueIterator where
+		Self::Hasher1: StorageHasherInfo<K1, Info=K1>,
+		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+
+	/// Iter over all value.
+	fn iter_value() -> Self::ValueIterator;
 }
 
 /// Iterator for prefixed map.
