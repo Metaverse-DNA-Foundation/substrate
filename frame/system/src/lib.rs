@@ -1048,14 +1048,16 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sp_runtime::traits::RootDispatcher<T::Call, T::Origin> for Module<T> where
+impl<T: Trait> sp_runtime::traits::RootDispatcher<T::Call, T::Origin> for Module<T>
+where
 	T::Call: Dispatchable<Origin = T::Origin>,
 {
 	fn dispatch(
 		dispatchable: T::Call,
 		origin: <T::Call as Dispatchable>::Origin,
+		token: sp_runtime::traits::Unconstructable<sp_runtime::traits::DispatcherToken>,
 	) -> sp_runtime::DispatchResult {
-		Self::raw_dispatch(dispatchable, origin)
+		Self::raw_dispatch(dispatchable, origin, token)
 	}
 }
 
